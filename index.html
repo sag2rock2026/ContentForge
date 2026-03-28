@@ -762,7 +762,7 @@ async function generate() {
   document.getElementById('output-actions').style.display='none';
   document.getElementById('stats-bar').style.display='none';
   document.getElementById('raw-box').classList.remove('visible');
-  document.getElementById('sections-out').innerHTML='<div style="color:var(--text2);font-size:14px;padding:8px 0;">Generating<span class="cursor"></span></div>';
+  document.getElementById('sections-out').innerHTML='<div style="color:var(--text2);font-size:14px;padding:8px 0;">Generating — this takes 10–20 seconds<span class="cursor"></span></div>';
   document.getElementById('topic-display').textContent=topic;
 
   const btn=document.getElementById('gen-btn');
@@ -773,38 +773,14 @@ async function generate() {
     const res=await fetch('/api/generate',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:4096,
-        stream:true,
-        messages:[{role:'user',content:prompt}]
-      })
+      body:JSON.stringify({prompt:prompt})
     });
-    if(!res.ok){const e=await res.json();throw new Error(e.error?.message||'API error '+res.status);}
 
-    const reader=res.body.getReader();
-    const dec=new TextDecoder();
-    let buf='';
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error||'API error '+res.status);
+    if(!data.text) throw new Error('No content returned. Check your API key in Vercel.');
 
-    while(true){
-      const{done,value}=await reader.read();
-      if(done)break;
-      buf+=dec.decode(value,{stream:true});
-      const lines=buf.split('\n'); buf=lines.pop();
-      for(const line of lines){
-        if(!line.startsWith('data: '))continue;
-        const data=line.slice(6).trim();
-        if(data==='[DONE]')break;
-        try{
-          const j=JSON.parse(data);
-          if(j.type==='content_block_delta'&&j.delta?.text){
-            fullText+=j.delta.text;
-            document.getElementById('sections-out').innerHTML=
-              `<div style="color:var(--text2);font-size:13px;white-space:pre-wrap;line-height:1.7;">${fullText.slice(-600)}<span class="cursor"></span></div>`;
-          }
-        }catch(e){}
-      }
-    }
+    fullText=data.text;
 
     // Final render
     showOutput(fullText);
@@ -819,7 +795,7 @@ async function generate() {
     document.getElementById('sections-out').innerHTML='';
     document.getElementById('error-box').innerHTML=
       `<div class="error-box"><strong>Error:</strong> ${err.message}<br><br>
-      <small style="color:var(--text3);">This app uses the Claude API. It works natively inside Claude.ai Artifacts.<br>For standalone use, add your Anthropic API key to the fetch headers.</small></div>`;
+      <small style="color:var(--text3);">Make sure GEMINI_API_KEY is added in Vercel → Settings → Environment Variables, then Redeploy.</small></div>`;
   } finally {
     btn.disabled=false;
     btn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Generate Content';
